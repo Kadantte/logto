@@ -1,3 +1,4 @@
+import cors from '@koa/cors';
 import { getManagementApiResourceIndicator } from '@logto/schemas';
 import Koa from 'koa';
 import Router from 'koa-router';
@@ -5,13 +6,13 @@ import Router from 'koa-router';
 import { EnvSet } from '#src/env-set/index.js';
 import koaAuditLog from '#src/middleware/koa-audit-log.js';
 import koaBodyEtag from '#src/middleware/koa-body-etag.js';
-import koaCors from '#src/middleware/koa-cors.js';
 import { koaManagementApiHooks } from '#src/middleware/koa-management-api-hooks.js';
 import koaTenantGuard from '#src/middleware/koa-tenant-guard.js';
 import type TenantContext from '#src/tenants/TenantContext.js';
 
 import koaAuth from '../middleware/koa-auth/index.js';
 import koaOidcAuth from '../middleware/koa-auth/koa-oidc-auth.js';
+import koaCors from '../middleware/koa-cors.js';
 
 import accountCentersRoutes from './account-center/index.js';
 import adminUserRoutes from './admin-user/index.js';
@@ -53,11 +54,15 @@ import wellKnownRoutes from './well-known/index.js';
 import wellKnownOpenApiRoutes from './well-known/well-known.openapi.js';
 
 const createRouters = (tenant: TenantContext) => {
+  const { adminUrlSet, cloudUrlSet } = EnvSet.values;
+
   const interactionRouter: AnonymousRouter = new Router();
+  interactionRouter.use(koaCors(adminUrlSet, cloudUrlSet));
   /** @deprecated */
   interactionRoutes(interactionRouter, tenant);
 
   const experienceRouter: AnonymousRouter = new Router();
+  experienceRouter.use(koaCors(adminUrlSet, cloudUrlSet));
   experienceRouter.use(koaAuditLog(tenant.queries));
   experienceApiRoutes(experienceRouter, tenant);
 
@@ -102,8 +107,15 @@ const createRouters = (tenant: TenantContext) => {
   }
 
   const anonymousRouter: AnonymousRouter = new Router();
+  anonymousRouter.use(koaCors(adminUrlSet, cloudUrlSet));
 
   const userRouter: UserRouter = new Router();
+  userRouter.use(
+    cors({
+      origin: (ctx) => ctx.get('Origin') || '*',
+      exposeHeaders: '*',
+    })
+  );
   userRouter.use(koaOidcAuth(tenant.provider));
   // TODO(LOG-10147): Rename to koaApiHooks, this middleware is used for both management API and user API
   userRouter.use(koaManagementApiHooks(tenant.libraries.hooks));
@@ -135,9 +147,6 @@ const createRouters = (tenant: TenantContext) => {
 
 export default function initApis(tenant: TenantContext): Koa {
   const apisApp = new Koa();
-
-  const { adminUrlSet, cloudUrlSet } = EnvSet.values;
-  apisApp.use(koaCors(adminUrlSet, cloudUrlSet));
   apisApp.use(koaBodyEtag());
 
   for (const router of createRouters(tenant)) {
