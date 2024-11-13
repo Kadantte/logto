@@ -13,6 +13,7 @@ import {
   updatePrimaryPhone,
   updateUser,
 } from '#src/api/profile.js';
+import { createVerificationRecordByPassword } from '#src/api/verification-record.js';
 import { expectRejects } from '#src/helpers/index.js';
 import {
   createDefaultTenantUserWithPassword,
@@ -79,38 +80,29 @@ describe('profile, account center fields disabled', () => {
       status: 400,
     });
 
-    await expectRejects(updatePassword(api, 'verification-record-id', 'new-password'), {
+    const verificationRecordId = await createVerificationRecordByPassword(api, password);
+    await expectRejects(updatePassword(api, verificationRecordId, 'new-password'), {
       code: 'account_center.filed_not_editable',
       status: 400,
     });
 
     await expectRejects(
-      updatePrimaryEmail(
-        api,
-        generateEmail(),
-        'verification-record-id',
-        'new-verification-record-id'
-      ),
+      updatePrimaryEmail(api, generateEmail(), verificationRecordId, 'new-verification-record-id'),
       expectedError
     );
 
     await expectRejects(
-      updatePrimaryPhone(
-        api,
-        generatePhone(),
-        'verification-record-id',
-        'new-verification-record-id'
-      ),
+      updatePrimaryPhone(api, generatePhone(), verificationRecordId, 'new-verification-record-id'),
       expectedError
     );
 
     await expectRejects(
-      updateIdentities(api, 'verification-record-id', 'new-verification-record-id'),
+      updateIdentities(api, verificationRecordId, 'new-verification-record-id'),
       expectedError
     );
 
     await expectRejects(
-      deleteIdentity(api, mockSocialConnectorTarget, 'verification-record-id'),
+      deleteIdentity(api, mockSocialConnectorTarget, verificationRecordId),
       expectedError
     );
 

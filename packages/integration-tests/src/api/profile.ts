@@ -5,7 +5,11 @@ export const updatePassword = async (
   api: KyInstance,
   verificationRecordId: string,
   password: string
-) => api.post('api/profile/password', { json: { password, verificationRecordId } });
+) =>
+  api.post('api/profile/password', {
+    json: { password },
+    headers: { 'verification-record-id': verificationRecordId },
+  });
 
 export const updatePrimaryEmail = async (
   api: KyInstance,
@@ -14,7 +18,8 @@ export const updatePrimaryEmail = async (
   newIdentifierVerificationRecordId: string
 ) =>
   api.post('api/profile/primary-email', {
-    json: { email, verificationRecordId, newIdentifierVerificationRecordId },
+    json: { email, newIdentifierVerificationRecordId },
+    headers: { 'verification-record-id': verificationRecordId },
   });
 
 export const updatePrimaryPhone = async (
@@ -24,7 +29,8 @@ export const updatePrimaryPhone = async (
   newIdentifierVerificationRecordId: string
 ) =>
   api.post('api/profile/primary-phone', {
-    json: { phone, verificationRecordId, newIdentifierVerificationRecordId },
+    json: { phone, newIdentifierVerificationRecordId },
+    headers: { 'verification-record-id': verificationRecordId },
   });
 
 export const updateIdentities = async (
@@ -33,7 +39,8 @@ export const updateIdentities = async (
   newIdentifierVerificationRecordId: string
 ) =>
   api.post('api/profile/identities', {
-    json: { verificationRecordId, newIdentifierVerificationRecordId },
+    json: { newIdentifierVerificationRecordId },
+    headers: { 'verification-record-id': verificationRecordId },
   });
 
 export const deleteIdentity = async (
@@ -42,7 +49,7 @@ export const deleteIdentity = async (
   verificationRecordId: string
 ) =>
   api.delete(`api/profile/identities/${target}`, {
-    searchParams: { verificationRecordId },
+    headers: { 'verification-record-id': verificationRecordId },
   });
 
 export const updateUser = async (api: KyInstance, body: Record<string, unknown>) =>
