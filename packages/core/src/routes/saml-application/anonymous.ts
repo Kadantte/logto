@@ -11,26 +11,23 @@ import RequestError from '#src/errors/RequestError/index.js';
 import koaAuditLog from '#src/middleware/koa-audit-log.js';
 import koaGuard from '#src/middleware/koa-guard.js';
 import type { AnonymousRouter, RouterInitArgs } from '#src/routes/types.js';
+import { SamlApplication } from '#src/saml-application/SamlApplication/index.js';
+import { generateAutoSubmitForm } from '#src/saml-application/SamlApplication/utils.js';
 import assertThat from '#src/utils/assert-that.js';
 import { getConsoleLogFromContext } from '#src/utils/console.js';
 
-import { SamlApplication } from '../SamlApplication/index.js';
-import { generateAutoSubmitForm } from '../SamlApplication/utils.js';
-
-const samlApplicationSignInCallbackQueryParametersGuard = z.union([
-  z.object({
+const samlApplicationSignInCallbackQueryParametersGuard = z
+  .object({
     code: z.string(),
-    state: z.string().optional(),
-    redirectUri: z.string().optional(),
-  }),
-  z.object({
+    state: z.string(),
+    redirectUri: z.string(),
     error: z.string(),
-    error_description: z.string().optional(),
-  }),
-]);
+    error_description: z.string(),
+  })
+  .partial();
 
 export default function samlApplicationAnonymousRoutes<T extends AnonymousRouter>(
-  ...[router, { id: tenantId, libraries, queries, envSet }]: RouterInitArgs<T>
+  ...[router, { queries, envSet }]: RouterInitArgs<T>
 ) {
   const {
     samlApplications: { getSamlApplicationDetailsById },
@@ -53,7 +50,7 @@ export default function samlApplicationAnonymousRoutes<T extends AnonymousRouter
       const { id } = ctx.guard.params;
 
       const details = await getSamlApplicationDetailsById(id);
-      const samlApplication = new SamlApplication(details, id, envSet.oidc.issuer, tenantId);
+      const samlApplication = new SamlApplication(details, id, envSet);
 
       ctx.status = 200;
       ctx.body = samlApplication.idPMetadata;
@@ -68,9 +65,10 @@ export default function samlApplicationAnonymousRoutes<T extends AnonymousRouter
     koaGuard({
       params: z.object({ id: z.string() }),
       query: samlApplicationSignInCallbackQueryParametersGuard,
-      status: [200, 400],
+      status: [200, 400, 404],
     }),
     koaAuditLog(queries),
+    // eslint-disable-next-line complexity
     async (ctx, next) => {
       const consoleLog = getConsoleLogFromContext(ctx);
       const {
@@ -78,23 +76,65 @@ export default function samlApplicationAnonymousRoutes<T extends AnonymousRouter
         query,
       } = ctx.guard;
 
+      /**
+       * When generating swagger.json, we build path/query guards and verify whether the query/path guard is an instance of ZodObject. Previously, our query guard was a Union of Zod Objects, which failed the validation. Now, we directly use ZodObject guards and perform additional validations within the API.
+       */
+      /* === query guard === */
+      // Validate query parameters
+      if (!query.code && !query.error) {
+        throw new RequestError({
+          code: 'guard.invalid_input',
+          message: 'Either code or error must be present',
+          type: 'query',
+        });
+      }
+
+      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+      if (query.code && (query.error || query.error_description)) {
+        throw new RequestError({
+          code: 'guard.invalid_input',
+          type: 'query',
+          message: 'Cannot have both code and error fields',
+        });
+      }
+
+      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+      if (query.error && (query.code || query.state || query.redirectUri)) {
+        throw new RequestError({
+          code: 'guard.invalid_input',
+          type: 'query',
+          message: 'When error is present, only error_description is allowed',
+        });
+      }
+
+      // Handle error in query parameters
+      if (query.error) {
+        throw new RequestError({
+          code: 'oidc.invalid_request',
+          message: query.error_description,
+          type: 'query',
+        });
+      }
+
+      assertThat(
+        query.code,
+        new RequestError({
+          code: 'guard.invalid_input',
+          type: 'query',
+          message: '`code` is required.',
+        })
+      );
+      /* === End query guard === */
+
       const log = ctx.createLog('SamlApplication.Callback');
 
       log.append({
         query,
-        samlApplicationId: id,
+        applicationId: id,
       });
 
-      // Handle error in query parameters
-      if ('error' in query) {
-        throw new RequestError({
-          code: 'oidc.invalid_request',
-          message: query.error_description,
-        });
-      }
-
       const details = await getSamlApplicationDetailsById(id);
-      const samlApplication = new SamlApplication(details, id, envSet.oidc.issuer, tenantId);
+      const samlApplication = new SamlApplication(details, id, envSet);
 
       assertThat(
         samlApplication.config.redirectUri === samlApplication.samlAppCallbackUrl,
@@ -208,11 +248,11 @@ export default function samlApplicationAnonymousRoutes<T extends AnonymousRouter
       const log = ctx.createLog('SamlApplication.AuthnRequest');
       log.append({
         query: ctx.guard.query,
-        samlApplicationId: id,
+        applicationId: id,
       });
 
       const details = await getSamlApplicationDetailsById(id);
-      const samlApplication = new SamlApplication(details, id, envSet.oidc.issuer, tenantId);
+      const samlApplication = new SamlApplication(details, id, envSet);
 
       const octetString = Object.keys(ctx.request.query)
         // eslint-disable-next-line no-restricted-syntax
@@ -317,11 +357,11 @@ export default function samlApplicationAnonymousRoutes<T extends AnonymousRouter
       const log = ctx.createLog('SamlApplication.AuthnRequest');
       log.append({
         body: ctx.guard.body,
-        samlApplicationId: id,
+        applicationId: id,
       });
 
       const details = await getSamlApplicationDetailsById(id);
-      const samlApplication = new SamlApplication(details, id, envSet.oidc.issuer, tenantId);
+      const samlApplication = new SamlApplication(details, id, envSet);
 
       // Parse login request
       try {

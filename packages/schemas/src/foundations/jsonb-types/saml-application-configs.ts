@@ -1,17 +1,17 @@
 import { type ToZodObject } from '@logto/connector-kit';
-import { completeUserClaims, type UserClaim } from '@logto/core-kit';
+import { userClaimsList, type UserClaim } from '@logto/core-kit';
 import { z } from 'zod';
 
-export type SamlAttributeMapping = Partial<Record<UserClaim | 'id', string>>;
+export type SamlAttributeMapping = Partial<Record<UserClaim | 'sub', string>>;
 
-export const samlAttributeMappingKeys = Object.freeze(['id', ...completeUserClaims] satisfies Array<
+export const samlAttributeMappingKeys = Object.freeze(['sub', ...userClaimsList] satisfies Array<
   keyof SamlAttributeMapping
 >);
 
 export const samlAttributeMappingGuard = z
   .object(
     Object.fromEntries(
-      samlAttributeMappingKeys.map((claim): [UserClaim | 'id', z.ZodString] => [claim, z.string()])
+      samlAttributeMappingKeys.map((claim): [UserClaim | 'sub', z.ZodString] => [claim, z.string()])
     )
   )
   .partial() satisfies z.ZodType<SamlAttributeMapping>;
@@ -51,14 +51,14 @@ export const samlEncryptionGuard = z
 export type SamlEncryption = z.input<typeof samlEncryptionGuard>;
 
 export enum NameIdFormat {
-  /** The Identity Provider can determine the format. */
-  Unspecified = 'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified',
-  /** Returns the email address of the user. */
-  EmailAddress = 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
   /** Uses unique and persistent identifiers for the user. */
   Persistent = 'urn:oasis:names:tc:SAML:2.0:nameid-format:persistent',
+  /** Returns the email address of the user. */
+  EmailAddress = 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
   /** Uses unique and transient identifiers for the user, which can be different for each session. */
   Transient = 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient',
+  /** The Identity Provider can determine the format. */
+  Unspecified = 'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified',
 }
 
 export const nameIdFormatGuard = z.nativeEnum(NameIdFormat);

@@ -19,6 +19,10 @@ import { createPasscodeQueries } from '#src/queries/passcode.js';
 import { createResourceQueries } from '#src/queries/resource.js';
 import { createRolesScopesQueries } from '#src/queries/roles-scopes.js';
 import { createRolesQueries } from '#src/queries/roles.js';
+import { createSamlApplicationConfigQueries } from '#src/queries/saml-application/configs.js';
+import { createSamlApplicationQueries } from '#src/queries/saml-application/index.js';
+import { createSamlApplicationSecretsQueries } from '#src/queries/saml-application/secrets.js';
+import { createSamlApplicationSessionQueries } from '#src/queries/saml-application/sessions.js';
 import { createScopeQueries } from '#src/queries/scope.js';
 import { createSignInExperienceQueries } from '#src/queries/sign-in-experience.js';
 import SsoConnectorQueries from '#src/queries/sso-connectors.js';
@@ -28,12 +32,9 @@ import UserSsoIdentityQueries from '#src/queries/user-sso-identities.js';
 import { createUserQueries } from '#src/queries/user.js';
 import { createUsersRolesQueries } from '#src/queries/users-roles.js';
 import { createVerificationStatusQueries } from '#src/queries/verification-status.js';
-import { createSamlApplicationConfigQueries } from '#src/saml-applications/queries/configs.js';
-import { createSamlApplicationQueries } from '#src/saml-applications/queries/index.js';
-import { createSamlApplicationSecretsQueries } from '#src/saml-applications/queries/secrets.js';
-import { createSamlApplicationSessionQueries } from '#src/saml-applications/queries/sessions.js';
 
 import { AccountCenterQueries } from '../queries/account-center.js';
+import EmailTemplatesQueries from '../queries/email-templates.js';
 import { PersonalAccessTokensQueries } from '../queries/personal-access-tokens.js';
 import { VerificationRecordQueries } from '../queries/verification-records.js';
 
@@ -72,6 +73,7 @@ export default class Queries {
   verificationRecords = new VerificationRecordQueries(this.pool);
   accountCenters = new AccountCenterQueries(this.pool);
   tenants = createTenantQueries(this.pool);
+  emailTemplates = new EmailTemplatesQueries(this.pool, this.wellKnownCache);
 
   constructor(
     public readonly pool: CommonQueryMethods,

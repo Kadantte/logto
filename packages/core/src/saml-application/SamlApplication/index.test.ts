@@ -2,6 +2,8 @@ import { UserScope, ReservedScope } from '@logto/core-kit';
 import { NameIdFormat } from '@logto/schemas';
 import nock from 'nock';
 
+import { EnvSet, getTenantEndpoint } from '#src/env-set/index.js';
+
 import { SamlApplication } from './index.js';
 
 const { jest } = import.meta;
@@ -13,6 +15,8 @@ class TestSamlApplication extends SamlApplication {
   public exposedGetUserInfo = this.getUserInfo;
   public exposedFetchOidcConfig = this.fetchOidcConfig;
   public exposedGetScopesFromAttributeMapping = this.getScopesFromAttributeMapping;
+  public exposedBuildLoginResponseTemplate = this.buildLoginResponseTemplate;
+  public exposedBuildSamlAttributesTagValues = this.buildSamlAttributesTagValues;
 }
 
 describe('SamlApplication', () => {
@@ -29,12 +33,15 @@ describe('SamlApplication', () => {
     certificate: 'mock-certificate',
     secret: 'mock-secret',
     nameIdFormat: NameIdFormat.Persistent,
+    attributeMapping: {},
   };
 
   const mockUser = {
     sub: 'user123',
     email: 'user@example.com',
     name: 'Test User',
+    phone: '+1234567890',
+    phone_verified: true,
   };
 
   const mockTenantId = 'tenant-id';
@@ -53,7 +60,10 @@ describe('SamlApplication', () => {
   beforeEach(() => {
     // @ts-expect-error
     // eslint-disable-next-line @silverhand/fp/no-mutation
-    samlApp = new TestSamlApplication(mockDetails, mockSamlApplicationId, mockIssuer, mockTenantId);
+    samlApp = new TestSamlApplication(mockDetails, mockSamlApplicationId, {
+      oidc: { issuer: mockIssuer },
+      endpoint: getTenantEndpoint(mockTenantId, EnvSet.values),
+    });
 
     nock(mockIssuer).get('/.well-known/openid-configuration').reply(200, {
       token_endpoint: mockTokenEndpoint,
@@ -183,8 +193,10 @@ describe('SamlApplication', () => {
           attributeMapping: {},
         },
         mockSamlApplicationId,
-        mockIssuer,
-        mockTenantId
+        {
+          oidc: { issuer: mockIssuer },
+          endpoint: getTenantEndpoint(mockTenantId, EnvSet.values),
+        }
       );
 
       const scopes = app.exposedGetScopesFromAttributeMapping();
@@ -202,8 +214,10 @@ describe('SamlApplication', () => {
           attributeMapping: {},
         },
         mockSamlApplicationId,
-        mockIssuer,
-        mockTenantId
+        {
+          oidc: { issuer: mockIssuer },
+          endpoint: getTenantEndpoint(mockTenantId, EnvSet.values),
+        }
       );
 
       const scopes = app.exposedGetScopesFromAttributeMapping();
@@ -223,8 +237,10 @@ describe('SamlApplication', () => {
           },
         },
         mockSamlApplicationId,
-        mockIssuer,
-        mockTenantId
+        {
+          oidc: { issuer: mockIssuer },
+          endpoint: getTenantEndpoint(mockTenantId, EnvSet.values),
+        }
       );
 
       const scopes = app.exposedGetScopesFromAttributeMapping();
@@ -240,13 +256,15 @@ describe('SamlApplication', () => {
         {
           ...mockDetails,
           attributeMapping: {
-            id: 'id',
+            sub: 'sub',
             name: 'name',
           },
         },
         mockSamlApplicationId,
-        mockIssuer,
-        mockTenantId
+        {
+          oidc: { issuer: mockIssuer },
+          endpoint: getTenantEndpoint(mockTenantId, EnvSet.values),
+        }
       );
 
       const scopes = app.exposedGetScopesFromAttributeMapping();
@@ -272,8 +290,10 @@ describe('SamlApplication', () => {
           },
         },
         mockSamlApplicationId,
-        mockIssuer,
-        mockTenantId
+        {
+          oidc: { issuer: mockIssuer },
+          endpoint: getTenantEndpoint(mockTenantId, EnvSet.values),
+        }
       );
 
       const scopes = app.exposedGetScopesFromAttributeMapping();
@@ -285,6 +305,116 @@ describe('SamlApplication', () => {
       expect(scopes).toContain(UserScope.Phone);
       expect(scopes).toContain(UserScope.Roles);
       expect(scopes).toHaveLength(7);
+    });
+  });
+
+  describe('buildLoginResponseTemplate', () => {
+    it('should generate correct SAML response template with attribute mapping', () => {
+      const mockDetailsWithMapping = {
+        ...mockDetails,
+        attributeMapping: {
+          sub: 'userId',
+          email: 'emailAddress',
+          name: 'displayName',
+        },
+      };
+
+      const samlApp = new TestSamlApplication(
+        // @ts-expect-error
+        mockDetailsWithMapping,
+        mockSamlApplicationId,
+        {
+          oidc: { issuer: mockIssuer },
+          endpoint: getTenantEndpoint(mockTenantId, EnvSet.values),
+        }
+      );
+
+      const template = samlApp.exposedBuildLoginResponseTemplate();
+
+      expect(template.attributes).toEqual([
+        {
+          name: 'userId',
+          valueTag: 'userId',
+          nameFormat: 'urn:oasis:names:tc:SAML:2.0:attrname-format:basic',
+          valueXsiType: 'xs:string',
+        },
+        {
+          name: 'emailAddress',
+          valueTag: 'emailAddress',
+          nameFormat: 'urn:oasis:names:tc:SAML:2.0:attrname-format:basic',
+          valueXsiType: 'xs:string',
+        },
+        {
+          name: 'displayName',
+          valueTag: 'displayName',
+          nameFormat: 'urn:oasis:names:tc:SAML:2.0:attrname-format:basic',
+          valueXsiType: 'xs:string',
+        },
+      ]);
+    });
+  });
+
+  describe('buildSamlAttributesTagValues', () => {
+    it('should generate correct SAML attribute tag values from user info', () => {
+      const mockDetailsWithMapping = {
+        ...mockDetails,
+        attributeMapping: {
+          sub: 'userId',
+          email: 'emailAddress',
+          name: 'displayName',
+          phone: 'phoneNumber',
+        },
+      };
+
+      const samlApp = new TestSamlApplication(
+        // @ts-expect-error
+        mockDetailsWithMapping,
+        mockSamlApplicationId,
+        {
+          oidc: { issuer: mockIssuer },
+          endpoint: getTenantEndpoint(mockTenantId, EnvSet.values),
+        }
+      );
+
+      const tagValues = samlApp.exposedBuildSamlAttributesTagValues(mockUser);
+
+      expect(tagValues).toEqual({
+        attrUserId: 'user123',
+        attrEmailAddress: 'user@example.com',
+        attrDisplayName: 'Test User',
+        attrPhoneNumber: '+1234567890',
+      });
+    });
+
+    it('should skip undefined or null values from user info', () => {
+      const mockDetailsWithMapping = {
+        ...mockDetails,
+        attributeMapping: {
+          sub: 'userId',
+          email: 'emailAddress',
+          name: 'displayName',
+          picture: 'avatar', // This field doesn't exist in mockUser
+        },
+      };
+
+      const samlApp = new TestSamlApplication(
+        // @ts-expect-error
+        mockDetailsWithMapping,
+        mockSamlApplicationId,
+        {
+          oidc: { issuer: mockIssuer },
+          endpoint: getTenantEndpoint(mockTenantId, EnvSet.values),
+        }
+      );
+
+      const tagValues = samlApp.exposedBuildSamlAttributesTagValues(mockUser);
+
+      expect(tagValues).toEqual({
+        attrAvatar: 'null',
+        attrUserId: 'user123',
+        attrEmailAddress: 'user@example.com',
+        attrDisplayName: 'Test User',
+      });
     });
   });
 });
